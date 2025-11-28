@@ -1,0 +1,47 @@
+name: Check Path Lengths
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+    branches:
+      - 'main'
+  workflow_dispatch:
+
+jobs:
+  check-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Find long paths
+        id: pathcheck
+        continue-on-error: true
+        run: |
+          find src/pack -type f | awk '{
+            path = substr($0, 10);
+            if (length(path) > 80) print path
+          }' > long_paths.txt
+
+          if [ -s long_paths.txt ]; then
+            echo "Found files with paths longer than 80 characters:"
+            cat long_paths.txt
+            echo "has_long_paths=true" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "All file paths are within the 80 character limit."
+            echo "has_long_paths=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload list of long paths (only if violations)
+        if: steps.pathcheck.outputs.has_long_paths == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-paths
+          path: long_paths.txt
+
+      - name: Fail job if there are long paths
+        if: steps.pathcheck.outputs.has_long_paths == 'true'
+        run: exit 1

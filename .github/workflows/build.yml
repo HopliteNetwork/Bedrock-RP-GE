@@ -1,0 +1,38 @@
+name: Build & Deploy GeyserExtrasPack
+on:
+  push:
+    branches:
+      - 'main'
+  schedule:
+    - cron: '15 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: pip install awscli
+
+      - name: Build mcpack
+        run: |
+          mkdir dist
+          cd src/pack
+          zip -r ../../dist/GeyserExtrasPack.mcpack ./*
+
+      - name: Deploy to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CF_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          PACK_SIZE=$(stat -c%s "dist/GeyserExtrasPack.mcpack")
+
+          aws s3 cp "dist/GeyserExtrasPack.mcpack" "s3://${{ secrets.CF_R2_BUCKET }}/bedrock-ge/GeyserExtrasPack.mcpack" \
+            --endpoint-url "https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
+            --content-type "application/zip" \
+            --cache-control "public, max-age=604800"
+
+          echo "Uploaded: GeyserExtrasPack.mcpack ($PACK_SIZE bytes)"
